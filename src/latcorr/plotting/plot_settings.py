@@ -66,7 +66,7 @@ MARKER_CYCLE = [
 FONT_CONFIG = {
     "font.family": "serif",
     "mathtext.fontset": "stix",
-    "font.serif": ["Times New Roman"],
+    "font.serif": ["Times New Roman", "Times", "Nimbus Roman", "DejaVu Serif"],
 }
 
 FIG_WIDTH = 6.75
@@ -125,6 +125,7 @@ def auto_ylim(
 
 def default_plot() -> tuple[Figure, Axes]:
     """Create a default single-panel plot."""
+    apply_plot_style()
     fig = plt.figure(figsize=FIG_SIZE)
     ax = plt.axes()
     ax.tick_params(direction="in", top=True, right=True, **TICK_LABEL_STYLE)
@@ -134,6 +135,7 @@ def default_plot() -> tuple[Figure, Axes]:
 
 def default_sub_plot(height_ratio: int = 3) -> tuple[Figure, tuple[Axes, Axes]]:
     """Create default 2-row subplots with a shared x-axis."""
+    apply_plot_style()
     fig, (ax1, ax2) = plt.subplots(
         2,
         1,

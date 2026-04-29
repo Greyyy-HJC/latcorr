@@ -23,7 +23,7 @@ def test_read_pt2_h5_single_dataset():
     data = read_pt2_h5(path, source_sink="SS", gamma="5", momentum="PX0PY0PZ0")
 
     assert isinstance(data, np.ndarray)
-    assert data.shape == (64, 700)
+    assert data.shape == (700, 64)
     assert np.iscomplexobj(data)
 
 
@@ -36,7 +36,7 @@ def test_read_pt2_h5_gamma_mapping():
 
     assert isinstance(gamma_data, dict)
     assert "PX0PY0PZ0" in gamma_data
-    assert gamma_data["PX0PY0PZ0"].shape == (64, 700)
+    assert gamma_data["PX0PY0PZ0"].shape == (700, 64)
 
 
 def test_read_pt2_h5_requires_gamma_for_momentum():
@@ -46,3 +46,20 @@ def test_read_pt2_h5_requires_gamma_for_momentum():
 
     with pytest.raises(ValueError):
         read_pt2_h5(path, source_sink="SS", momentum="PX0PY0PZ0")
+
+
+def test_read_pt2_h5_with_resampling_bs():
+    path = _k0_path()
+    if not path.exists():
+        pytest.skip("k0 h5 file not present")
+
+    data = read_pt2_h5(
+        path,
+        source_sink="SS",
+        gamma="5",
+        momentum="PX0PY0PZ0",
+        resampling="bs",
+        n_samples=8,
+    )
+    assert data.shape == (8, 64)
+

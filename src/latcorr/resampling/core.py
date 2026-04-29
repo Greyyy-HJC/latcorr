@@ -1,5 +1,8 @@
 """Bootstrap and jackknife resampling interfaces."""
 
+from __future__ import annotations
+
+import gvar as gv
 import numpy as np
 
 
@@ -117,3 +120,82 @@ def jackknife(data: np.ndarray, axis: int = 0, bin_size: int = 1) -> np.ndarray:
     total = data.sum(axis=axis, keepdims=True)
 
     return (total - data) / (n_conf - 1)
+
+
+def jk_ls_avg(jk_ls: np.ndarray, axis: int = 0) -> np.ndarray:
+    """Average jackknife samples into gvar values."""
+    jk_arr = np.asarray(jk_ls)
+    if axis != 0:
+        jk_arr = np.swapaxes(jk_arr, 0, axis)
+
+    shape = jk_arr.shape
+    jk_flat = jk_arr.reshape(shape[0], -1)
+    n_sample = jk_flat.shape[0]
+    mean = np.mean(jk_flat, axis=0)
+
+    if len(shape) == 1:
+        sdev = np.std(jk_flat, axis=0) * np.sqrt(n_sample - 1)
+        return gv.gvar(mean, sdev)[0]
+
+    cov = np.cov(jk_flat, rowvar=False) * (n_sample - 1)
+    out = gv.gvar(mean, cov)
+    return out.reshape(shape[1:])
+
+
+def bs_ls_avg(bs_ls: np.ndarray, axis: int = 0) -> np.ndarray:
+    """Average bootstrap samples into gvar values."""
+    bs_arr = np.asarray(bs_ls)
+    if axis != 0:
+        bs_arr = np.swapaxes(bs_arr, 0, axis)
+
+    shape = bs_arr.shape
+    bs_flat = bs_arr.reshape(shape[0], -1)
+    mean = np.mean(bs_flat, axis=0)
+
+    if len(shape) == 1:
+        sdev = np.std(bs_flat, axis=0)
+        return gv.gvar(mean, sdev)[0]
+
+    cov = np.cov(bs_flat, rowvar=False)
+    out = gv.gvar(mean, cov)
+    return out.reshape(shape[1:])
+
+
+def jk_dict_avg(data: dict[str, np.ndarray]) -> dict[str, list[gv.GVar]]:
+    """Average a dict of jackknife arrays into a dict of gvar lists."""
+    key_order = list(data.keys())
+    lengths = {key: len(data[key][0]) for key in key_order}
+    n_sample = len(data[key_order[0]])
+
+    merged: list[list[float]] = []
+    for idx in range(n_sample):
+        row: list[float] = []
+        for key in key_order:
+            row.extend(list(data[key][idx]))
+        merged.append(row)
+
+    gv_ls = list(jk_ls_avg(np.asarray(merged)))
+    out: dict[str, list[gv.GVar]] = {}
+    for key in key_order:
+        out[key] = [gv_ls.pop(0) for _ in range(lengths[key])]
+    return out
+
+
+def bs_dict_avg(data: dict[str, np.ndarray]) -> dict[str, list[gv.GVar]]:
+    """Average a dict of bootstrap arrays into a dict of gvar lists."""
+    key_order = list(data.keys())
+    lengths = {key: len(data[key][0]) for key in key_order}
+    n_sample = len(data[key_order[0]])
+
+    merged: list[list[float]] = []
+    for idx in range(n_sample):
+        row: list[float] = []
+        for key in key_order:
+            row.extend(list(data[key][idx]))
+        merged.append(row)
+
+    gv_ls = list(bs_ls_avg(np.asarray(merged)))
+    out: dict[str, list[gv.GVar]] = {}
+    for key in key_order:
+        out[key] = [gv_ls.pop(0) for _ in range(lengths[key])]
+    return out

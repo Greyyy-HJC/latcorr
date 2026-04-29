@@ -1,4 +1,4 @@
-"""HDF5 readers for qTMDWF distribution-amplitude data."""
+"""HDF5 readers for 3-point qTMD correlator data."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ import numpy as np
 from ._resampling import ResamplingMode, apply_resampling
 
 
-def read_qda_h5(
+def read_pt3_h5(
     path: str | PathLike[str],
-    source_sink: str = "SP",
-    gamma: str = "T5",
+    source_sink: str = "SS",
+    gamma: str = "T",
     momentum: str = "PX0PY0PZ0",
     b_dir: str = "b_X",
     eta: str = "eta0",
@@ -24,16 +24,16 @@ def read_qda_h5(
     bin_size: int = 5,
     seed: int | None = 1984,
 ) -> np.ndarray | dict[str, np.ndarray] | dict[str, dict[str, np.ndarray]]:
-    """Read qTMDWF quasi-DA datasets from hierarchical HDF5 groups.
+    """Read qTMD 3-point datasets from hierarchical HDF5 groups.
 
     Parameters
     ----------
     path:
         HDF5 file path.
     source_sink:
-        Top-level source/sink group, default ``"SP"``.
+        Top-level source/sink group, default ``"SS"``.
     gamma:
-        Gamma channel group, default ``"T5"``.
+        Gamma channel group, default ``"T"``.
     momentum:
         Momentum group, default ``"PX0PY0PZ0"``.
     b_dir:

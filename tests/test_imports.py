@@ -17,3 +17,7 @@ def test_core_subpackages_import():
     assert ground_state is not None
     assert utils is not None
     assert correlators.read_pt2_h5 is not None
+    assert correlators.read_pt3_h5 is not None
+    assert correlators.get_ratio_data is not None
+    assert correlators.get_sum_data is not None
+    assert correlators.get_fh_data is not None
