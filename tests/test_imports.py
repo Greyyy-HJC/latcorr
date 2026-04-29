@@ -1,5 +1,5 @@
 import latcorr
-from latcorr import correlators, ground_state, plotting, preprocess, resampling, utils
+from latcorr import analysis, correlators, ground_state, plotting, preprocess, resampling, utils
 
 
 def test_top_level_import():
@@ -11,7 +11,9 @@ def test_core_subpackages_import():
     assert resampling.jackknife is not None
     assert resampling.bin_data is not None
     assert preprocess is not None
+    assert analysis is not None
     assert correlators is not None
     assert plotting is not None
     assert ground_state is not None
     assert utils is not None
+    assert correlators.read_pt2_h5 is not None

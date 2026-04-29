@@ -33,7 +33,8 @@ python -m pip install -e ".[dev]"
 
 - `latcorr.preprocess`: preprocessing namespace
 - `latcorr.resampling`: binning, bootstrap, and jackknife placeholders
-- `latcorr.correlators`: correlator construction namespace
+- `latcorr.correlators`: correlator readers (`read_pt2_h5`, `read_qda_h5`)
+- `latcorr.analysis`: high-level physics-analysis entrypoints (placeholder scripts)
 - `latcorr.plotting`: plotting namespace
 - `latcorr.ground_state`: ground-state extraction namespace
 - `latcorr.utils`: shared utility namespace
