@@ -1,0 +1,1 @@
+"""Ground-state extraction helpers."""

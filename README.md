@@ -1,0 +1,71 @@
+# latcorr
+
+`latcorr` is a Python package skeleton for lattice QCD data processing and
+analysis. The initial layout follows the separation used in LaMETLat:
+preprocessing, resampling, correlator construction, plotting, and ground-state
+extraction live in separate modules.
+
+## Installation
+
+With `uv`:
+
+```bash
+uv sync --dev
+```
+
+Then run commands inside the project environment:
+
+```bash
+uv run python
+uv run pytest
+```
+
+Equivalently, use `.venv/bin/python` directly. Running plain `python` from the
+outer conda environment does not use the `.venv` created by `uv sync`.
+
+Fallback with `pip`:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+## Package Structure
+
+- `latcorr.preprocess`: preprocessing namespace
+- `latcorr.resampling`: binning, bootstrap, and jackknife placeholders
+- `latcorr.correlators`: correlator construction namespace
+- `latcorr.plotting`: plotting namespace
+- `latcorr.ground_state`: ground-state extraction namespace
+- `latcorr.utils`: shared utility namespace
+
+## Minimal Usage
+
+```python
+import latcorr
+from latcorr.resampling import bootstrap, jackknife
+
+print(latcorr.__version__)
+```
+
+## Development
+
+Run tests with:
+
+```bash
+python -m pytest
+```
+
+## Code Style
+
+- Prefer simple functions and NumPy operations over early abstractions.
+- Use direct type hints like `np.ndarray`, `int`, and `bool` when they clarify
+  a function signature.
+- Avoid helper type modules, dataclass-based configuration, protocols, and
+  other framework-like structure until the code actually needs them.
+- Keep subpackages lightweight: add files and public APIs only when there is
+  real analysis code to put there.
+- Keep numerical routines separate from plotting and notebook visualization.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).

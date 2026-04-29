@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+uv.lock
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Test and coverage output
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Type checkers and linters
+.mypy_cache/
+.ruff_cache/
+.pyre/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Local data and generated artifacts
+*.h5
+*.hdf5
+*.npy
+*.npz
+plots/
+cache/
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/
