@@ -125,6 +125,7 @@ def jackknife(data: np.ndarray, axis: int = 0, bin_size: int = 1) -> np.ndarray:
 def jk_ls_avg(jk_ls: np.ndarray, axis: int = 0) -> np.ndarray:
     """Average jackknife samples into gvar values."""
     jk_arr = np.asarray(jk_ls)
+    assert np.isrealobj(jk_arr), "jk_ls must contain real-valued samples"
     if axis != 0:
         jk_arr = np.swapaxes(jk_arr, 0, axis)
 
@@ -133,9 +134,9 @@ def jk_ls_avg(jk_ls: np.ndarray, axis: int = 0) -> np.ndarray:
     n_sample = jk_flat.shape[0]
     mean = np.mean(jk_flat, axis=0)
 
-    if len(shape) == 1:
+    if jk_flat.shape[1] == 1:
         sdev = np.std(jk_flat, axis=0) * np.sqrt(n_sample - 1)
-        return gv.gvar(mean, sdev)[0]
+        return gv.gvar(mean, sdev)
 
     cov = np.cov(jk_flat, rowvar=False) * (n_sample - 1)
     out = gv.gvar(mean, cov)
@@ -145,6 +146,7 @@ def jk_ls_avg(jk_ls: np.ndarray, axis: int = 0) -> np.ndarray:
 def bs_ls_avg(bs_ls: np.ndarray, axis: int = 0) -> np.ndarray:
     """Average bootstrap samples into gvar values."""
     bs_arr = np.asarray(bs_ls)
+    assert np.isrealobj(bs_arr), "bs_ls must contain real-valued samples"
     if axis != 0:
         bs_arr = np.swapaxes(bs_arr, 0, axis)
 
@@ -152,9 +154,9 @@ def bs_ls_avg(bs_ls: np.ndarray, axis: int = 0) -> np.ndarray:
     bs_flat = bs_arr.reshape(shape[0], -1)
     mean = np.mean(bs_flat, axis=0)
 
-    if len(shape) == 1:
+    if bs_flat.shape[1] == 1:
         sdev = np.std(bs_flat, axis=0)
-        return gv.gvar(mean, sdev)[0]
+        return gv.gvar(mean, sdev)
 
     cov = np.cov(bs_flat, rowvar=False)
     out = gv.gvar(mean, cov)

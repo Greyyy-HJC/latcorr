@@ -15,6 +15,7 @@ from ._resampling import ResamplingMode, apply_resampling
 def read_pt2_h5(
     path: str | PathLike[str],
     source_sink: str = "SS",
+    *,
     gamma: str | None = None,
     momentum: str | None = None,
     resampling: ResamplingMode = "none",
@@ -139,7 +140,9 @@ def pt2_to_meff(pt2_array: np.ndarray, boundary: str = "periodic") -> np.ndarray
     if boundary == "periodic":
         return np.arccosh((data[2:] + data[:-2]) / (2 * data[1:-1]))
     if boundary == "anti-periodic":
-        return np.arcsinh((data[2:] + data[:-2]) / (2 * data[1:-1]))
+        # For both cosh- and sinh-type time dependence, the symmetric
+        # nearest-neighbor recurrence is C(t+1)+C(t-1)=2*cosh(m)*C(t).
+        return np.arccosh((data[2:] + data[:-2]) / (2 * data[1:-1]))
     if boundary == "none":
         return np.log(data[:-1] / data[1:])
     raise ValueError(f"unsupported boundary mode: {boundary!r}")
@@ -150,28 +153,37 @@ def pt2_to_meff_solve(pt2_array: np.ndarray, boundary: str = "periodic") -> np.n
     data = np.asarray(pt2_array)
     if data.ndim != 1:
         raise ValueError(f"pt2_to_meff_solve expects a 1D array, got shape {data.shape}")
-    if data.size < 2 and boundary == "none":
-        raise ValueError("pt2_array must have at least 2 points for boundary='none'")
-    if data.size < 2 and boundary in {"periodic", "anti-periodic"}:
+    if data.size < 2:
         raise ValueError("pt2_array must have at least 2 points")
-
     if boundary == "none":
         return np.log(data[:-1] / data[1:])
-    if boundary not in {"periodic", "anti-periodic"}:
-        raise ValueError(f"unsupported boundary mode: {boundary!r}")
 
     nt = data.size
     meff_values: list[float] = []
 
-    def equation(meff: float, t: int, ct: complex, ctp1: complex) -> complex:
+    def equation(meff: np.ndarray, t: int, ct: complex, ctp1: complex) -> np.ndarray:
+        # scipy.optimize.fsolve expects an array-like float output.
+        m = float(np.atleast_1d(meff)[0])
+        ct_real = float(np.real(ct))
+        ctp1_real = float(np.real(ctp1))
+
         if boundary == "periodic":
-            return ct * np.cosh(meff * (t + 1 - nt / 2)) - ctp1 * np.cosh(meff * (t - nt / 2))
-        return ct * np.sinh(meff * (t + 1 - nt / 2)) - ctp1 * np.sinh(meff * (t - nt / 2))
+            residual = ct_real * np.cosh(m * (t + 1 - nt / 2)) - ctp1_real * np.cosh(
+                m * (t - nt / 2)
+            )
+            return np.asarray([float(np.real(residual))], dtype=float)
+        if boundary == "anti-periodic":
+            residual = ct_real * np.sinh(m * (t + 1 - nt / 2)) - ctp1_real * np.sinh(
+                m * (t - nt / 2)
+            )
+            return np.asarray([float(np.real(residual))], dtype=float)
+        raise ValueError(f"unsupported boundary mode: {boundary!r}")
 
     for t in range(nt - 1):
         ct = data[t]
         ctp1 = data[t + 1]
-        solution = fsolve(equation, 1.0, args=(t, ct, ctp1))
+        guess = 1.0
+        solution = fsolve(equation, np.asarray([guess], dtype=float), args=(t, ct, ctp1))
         meff_values.append(float(np.real(solution[0])))
 
     return np.asarray(meff_values)

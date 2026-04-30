@@ -74,9 +74,9 @@ GOLDEN_RATIO = 1.618034333
 FIG_SIZE = (FIG_WIDTH, FIG_WIDTH / GOLDEN_RATIO)
 
 PLOT_AXES = [0.15, 0.15, 0.8, 0.8]
-LABEL_FONT = {"fontsize": 18}
-SMALL_LABEL_FONT = {"fontsize": 15}
-TICK_LABEL_STYLE = {"labelsize": 18}
+FONT_SIZE = {"fontsize": 18}
+LEGEND_SIZE = {"fontsize": 14}
+LABEL_SIZE = {"labelsize": 18}
 
 ERRORBAR_STYLE = {
     "markersize": 5,
@@ -95,13 +95,18 @@ ERRORBAR_CIRCLE_STYLE = {
     "elinewidth": 1.5,
 }
 
+TSEP = r"$t_{\mathrm{sep}}$"
+
 TMIN_LABEL = r"$t_{\mathrm{min}}~/~a$"
 TMAX_LABEL = r"$t_{\mathrm{max}}~/~a$"
 TAU_CENTER_LABEL = r"$(\tau - t_{\rm{sep}}/2)~/~a$"
 TSEP_LABEL = r"${t_{\mathrm{sep}}~/~a}$"
 Z_LABEL = r"${z~/~a}$"
 LAMBDA_LABEL = r"$\lambda = z P^z$"
-MEFF_LABEL = r"${m}_{\mathrm{eff}}~/~\mathrm{GeV}$"
+MEFF_LABEL = r"${m}_{\mathrm{eff}}$"
+
+RATIO_REAL_LABEL = r"$\Re\left[\mathcal{R}(t_{\mathrm{sep}},\tau)\right]$"
+RATIO_IMAG_LABEL = r"$\Im\left[\mathcal{R}(t_{\mathrm{sep}},\tau)\right]$"
 
 
 def apply_plot_style() -> None:
@@ -128,7 +133,7 @@ def default_plot() -> tuple[Figure, Axes]:
     apply_plot_style()
     fig = plt.figure(figsize=FIG_SIZE)
     ax = plt.axes()
-    ax.tick_params(direction="in", top=True, right=True, **TICK_LABEL_STYLE)
+    ax.tick_params(direction="in", top=True, right=True, **LABEL_SIZE)
     ax.grid(linestyle=":")
     return fig, ax
 
@@ -146,7 +151,7 @@ def default_sub_plot(height_ratio: int = 3) -> tuple[Figure, tuple[Axes, Axes]]:
     fig.subplots_adjust(hspace=0)
 
     for ax in (ax1, ax2):
-        ax.tick_params(direction="in", top=True, right=True, **TICK_LABEL_STYLE)
+        ax.tick_params(direction="in", top=True, right=True, **LABEL_SIZE)
         ax.grid(linestyle=":")
 
     return fig, (ax1, ax2)

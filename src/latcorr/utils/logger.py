@@ -1,4 +1,17 @@
-"""Logging helpers for analysis scripts."""
+"""
+Logging helpers for analysis scripts.
+
+Example:
+```python
+setup_logger("filename.log")
+
+logger = logging.getLogger("my_logger")
+logger.info("This is an info message")
+logger.warning("This is a warning message")
+logger.error("This is an error message")
+logger.critical("This is a critical message")
+```
+"""
 
 from __future__ import annotations
 
@@ -9,8 +22,6 @@ from pathlib import Path
 
 def setup_logger(
     log_file: str | Path,
-    *,
-    name: str = "latcorr",
     console_output: bool = False,
     mode: str = "w",
 ) -> logging.Logger:
@@ -18,7 +29,7 @@ def setup_logger(
     path = Path(log_file)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    logger = logging.getLogger(name)
+    logger = logging.getLogger("my_logger")
     logger.setLevel(logging.INFO)
     logger.propagate = False
     logger.handlers.clear()
