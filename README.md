@@ -31,7 +31,7 @@ python -m pip install -e ".[dev]"
 
 ## Package Structure
 
-- `latcorr.preprocess`: preprocessing namespace
+- `latcorr.preprocess`: preprocessing helpers for cleaning, slicing, symmetrizing, and nucleon 2pt source averaging
 - `latcorr.resampling`: binning, bootstrap, and jackknife placeholders
 - `latcorr.correlators`: correlator readers (`read_pt2_h5`, `read_qda_h5`)
 - `latcorr.analysis`: high-level physics-analysis entrypoints (placeholder scripts)
@@ -43,10 +43,22 @@ python -m pip install -e ".[dev]"
 
 ```python
 import latcorr
+from latcorr.preprocess import preprocess_correlator
 from latcorr.resampling import bootstrap, jackknife
 
 print(latcorr.__version__)
 ```
+
+Example preprocessing workflow:
+
+```python
+from latcorr.preprocess import preprocess_correlator
+```
+
+See `example/preprocess/` for a synthetic nucleon TMDPDF preprocessing demo.
+There is also a nucleon 2pt stripping example that averages multiple sources
+per configuration before writing the stripped ensemble HDF5 file.
+For the larger 3pt TMDPDF workflow, see `example/preprocess/strip_nucleon_tmdpdf.py`.
 
 ## Development
 
