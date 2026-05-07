@@ -39,8 +39,12 @@ htmlcov/
 *.npz
 plots/
 cache/
+!example/data/
+!example/data/*.h5
 
 # OS/editor
 .DS_Store
 .idea/
 .vscode/
+.codex/
+.agents/

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from .ratio import get_ratio_data
+from .pt3_ratio import get_pt3_ratio_data
 
 
 def get_sum_data(
@@ -17,7 +17,7 @@ def get_sum_data(
     sample_axis: int = 0,
 ) -> tuple[dict[int, np.ndarray], dict[int, np.ndarray]]:
     """Compute summed ratio per tsep after contact-term cuts."""
-    ratio_real, ratio_imag = get_ratio_data(
+    ratio_real, ratio_imag = get_pt3_ratio_data(
         pt2_real=pt2_real,
         pt2_imag=pt2_imag,
         pt3_real=pt3_real,

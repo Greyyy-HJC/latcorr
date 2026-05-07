@@ -1,11 +1,11 @@
-"""Ratio helpers from already-loaded 2pt/3pt correlator arrays."""
+"""3pt ratio helpers from already-loaded 2pt/3pt correlator arrays."""
 
 from __future__ import annotations
 
 import numpy as np
 
 
-def get_ratio_data(
+def get_pt3_ratio_data(
     pt2_real: np.ndarray,
     pt2_imag: np.ndarray,
     pt3_real: dict[int, np.ndarray],
@@ -33,9 +33,13 @@ def get_ratio_data(
         if not isinstance(tsep, int):
             raise ValueError("pt3 keys must be integer tsep values")
         if not (0 <= tsep < pt2_complex.shape[1]):
-            raise ValueError(f"tsep index out of range for pt2 arrays shape {pt2_complex.shape}")
+            raise ValueError(
+                f"tsep index out of range for pt2 arrays shape {pt2_complex.shape}"
+            )
 
-        pt3_complex = np.moveaxis(np.asarray(pt3_real[tsep]), sample_axis, 0) + 1j * np.moveaxis(np.asarray(pt3_imag[tsep]), sample_axis, 0)
+        pt3_complex = np.moveaxis(
+            np.asarray(pt3_real[tsep]), sample_axis, 0
+        ) + 1j * np.moveaxis(np.asarray(pt3_imag[tsep]), sample_axis, 0)
         if pt3_complex.ndim != 2:
             raise ValueError(f"pt3[{tsep}] must be a 2D array")
         if pt3_complex.shape[0] != pt2_complex.shape[0]:

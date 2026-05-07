@@ -54,3 +54,13 @@ def test_read_pt3_h5_with_resampling_bs():
 
     data = read_pt3_h5(path, bT="bT0", bz="bz0", resampling="bs", n_samples=8)
     assert data.shape == (8, 6)
+
+
+def test_read_pt3_h5_with_threshold_filter():
+    path = _pt3_path()
+    if not path.exists():
+        pytest.skip("pt3 h5 file not present")
+
+    data = read_pt3_h5(path, bT="bT0", bz="bz0", threshold=0)
+
+    assert np.all(np.abs(data) <= 1)

@@ -2,6 +2,7 @@
 
 from .core import (
     bin_data,
+    bad_point_filter,
     bootstrap,
     bs_dict_avg,
     bs_ls_avg,
@@ -12,6 +13,7 @@ from .core import (
 
 __all__ = [
     "bin_data",
+    "bad_point_filter",
     "bootstrap",
     "jackknife",
     "jk_ls_avg",

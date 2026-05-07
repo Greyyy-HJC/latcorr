@@ -63,3 +63,44 @@ def test_read_pt2_h5_with_resampling_bs():
     )
     assert data.shape == (8, 64)
 
+
+def test_read_pt2_h5_with_normalization():
+    path = _k0_path()
+    if not path.exists():
+        pytest.skip("k0 h5 file not present")
+
+    data = read_pt2_h5(
+        path,
+        source_sink="SS",
+        gamma="5",
+        momentum="PX0PY0PZ0",
+        normalization=True,
+    )
+
+    np.testing.assert_allclose(np.mean(data[:, 0]), 1.0)
+
+
+def test_read_pt2_h5_gamma_mapping_with_normalization():
+    path = _k0_path()
+    if not path.exists():
+        pytest.skip("k0 h5 file not present")
+
+    gamma_data = read_pt2_h5(path, source_sink="SS", gamma="5", normalization=True)
+
+    np.testing.assert_allclose(np.mean(gamma_data["PX0PY0PZ0"][:, 0]), 1.0)
+
+
+def test_read_pt2_h5_with_threshold_filter():
+    path = _k0_path()
+    if not path.exists():
+        pytest.skip("k0 h5 file not present")
+
+    data = read_pt2_h5(
+        path,
+        source_sink="SS",
+        gamma="5",
+        momentum="PX0PY0PZ0",
+        threshold=0,
+    )
+
+    assert np.all(np.abs(data) <= 1)

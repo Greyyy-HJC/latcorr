@@ -7,6 +7,8 @@ from os import PathLike
 import h5py
 import numpy as np
 
+from latcorr.resampling import bad_point_filter
+
 from ._resampling import ResamplingMode, apply_resampling
 
 
@@ -23,6 +25,7 @@ def read_qda_h5(
     n_samples: int = 200,
     bin_size: int = 5,
     seed: int | None = 1984,
+    threshold: float | None = None,
 ) -> np.ndarray | dict[str, np.ndarray] | dict[str, dict[str, np.ndarray]]:
     """Read qTMDWF quasi-DA datasets from hierarchical HDF5 groups.
 
@@ -52,6 +55,8 @@ def read_qda_h5(
         Optional binning size before jackknife/bootstrap.
     seed:
         Random seed for bootstrap sampling.
+    threshold:
+        If provided, apply ``bad_point_filter`` before resampling.
 
     Returns
     -------
@@ -78,6 +83,7 @@ def read_qda_h5(
                     n_samples=n_samples,
                     bin_size=bin_size,
                     seed=seed,
+                    threshold=threshold,
                 )
                 for bt_key in eta_group.keys()
             }
@@ -90,12 +96,15 @@ def read_qda_h5(
                 n_samples=n_samples,
                 bin_size=bin_size,
                 seed=seed,
+                threshold=threshold,
             )
 
         if bz not in bt_group:
             raise KeyError(f"bz key not found under {bT!r}: {bz!r}")
 
         data = np.swapaxes(np.asarray(bt_group[bz]), 0, 1)
+        if threshold is not None:
+            data = bad_point_filter(data, threshold=threshold)
         return apply_resampling(
             data,
             resampling,
@@ -113,19 +122,23 @@ def _read_dataset_group(
     n_samples: int,
     bin_size: int,
     seed: int | None,
+    threshold: float | None,
 ) -> dict[str, np.ndarray]:
     """Read all datasets in a group into NumPy arrays."""
-    return {
-        key: apply_resampling(
-            np.swapaxes(np.asarray(group[key]), 0, 1),
+    data_by_key: dict[str, np.ndarray] = {}
+    for key in group.keys():
+        data = np.swapaxes(np.asarray(group[key]), 0, 1)
+        if threshold is not None:
+            data = bad_point_filter(data, threshold=threshold)
+        data_by_key[key] = apply_resampling(
+            data,
             resampling,
             sample_axis=0,
             n_samples=n_samples,
             bin_size=bin_size,
             seed=seed,
         )
-        for key in group.keys()
-    }
+    return data_by_key
 
 
 def _require_group(parent: h5py.File | h5py.Group, key: str, level: str) -> h5py.Group:

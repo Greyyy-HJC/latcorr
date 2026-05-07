@@ -55,3 +55,13 @@ def test_read_qda_h5_with_resampling_jk():
 
     data = read_qda_h5(path, bT="bT0", bz="bz0", resampling="jk")
     assert data.shape == (140, 64)
+
+
+def test_read_qda_h5_with_threshold_filter():
+    path = _qda_path()
+    if not path.exists():
+        pytest.skip("DA h5 file not present")
+
+    data = read_qda_h5(path, bT="bT0", bz="bz0", threshold=0)
+
+    assert np.all(np.abs(data) <= 1)

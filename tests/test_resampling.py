@@ -1,7 +1,19 @@
 import numpy as np
 import pytest
 
-from latcorr.resampling import bin_data, bootstrap, jackknife
+from latcorr.resampling import bad_point_filter, bin_data, bootstrap, jackknife
+
+
+def test_bad_point_filter_replaces_large_entries():
+    data = np.array([[0.5, 2.0], [-3.0, 0.2]])
+
+    out = bad_point_filter(data, threshold=1)
+
+    np.testing.assert_allclose(data, np.array([[0.5, 2.0], [-3.0, 0.2]]))
+    assert out[0, 0] == 0.5
+    assert out[1, 1] == 0.2
+    assert out[0, 1] in {-1, 1}
+    assert out[1, 0] in {-1, 1}
 
 
 def test_bin_data_axis0():

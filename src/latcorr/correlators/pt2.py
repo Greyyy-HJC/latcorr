@@ -9,6 +9,8 @@ import h5py
 import numpy as np
 from scipy.optimize import fsolve
 
+from latcorr.resampling import bad_point_filter
+
 from ._resampling import ResamplingMode, apply_resampling
 
 
@@ -22,6 +24,8 @@ def read_pt2_h5(
     n_samples: int = 200,
     bin_size: int = 5,
     seed: int | None = 1984,
+    normalization: bool = False,
+    threshold: float | None = None,
 ) -> np.ndarray | dict[str, np.ndarray] | dict[str, dict[str, np.ndarray]]:
     """Read 2-point correlator datasets from a comb_c2pt HDF5 file.
 
@@ -46,6 +50,10 @@ def read_pt2_h5(
         Optional binning size before jackknife/bootstrap.
     seed:
         Random seed for bootstrap sampling.
+    normalization:
+        If True, divide each returned array by the sample mean at ``t=0``.
+    threshold:
+        If provided, apply ``bad_point_filter`` before resampling.
 
     Returns
     -------
@@ -71,6 +79,8 @@ def read_pt2_h5(
                     n_samples=n_samples,
                     bin_size=bin_size,
                     seed=seed,
+                    normalization=normalization,
+                    threshold=threshold,
                 )
                 for gamma_key in source_group.keys()
             }
@@ -87,6 +97,8 @@ def read_pt2_h5(
                 n_samples=n_samples,
                 bin_size=bin_size,
                 seed=seed,
+                normalization=normalization,
+                threshold=threshold,
             )
 
         if momentum not in gamma_group:
@@ -95,7 +107,9 @@ def read_pt2_h5(
             )
 
         data = np.swapaxes(np.asarray(gamma_group[momentum]), 0, 1)
-        return apply_resampling(
+        if threshold is not None:
+            data = bad_point_filter(data, threshold=threshold)
+        data = apply_resampling(
             data,
             resampling,
             sample_axis=0,
@@ -103,6 +117,9 @@ def read_pt2_h5(
             bin_size=bin_size,
             seed=seed,
         )
+        if normalization:
+            data = _normalize_by_t0_sample_mean(data)
+        return data
 
 
 def _read_momentum_group(
@@ -112,19 +129,39 @@ def _read_momentum_group(
     n_samples: int,
     bin_size: int,
     seed: int | None,
+    normalization: bool,
+    threshold: float | None,
 ) -> dict[str, np.ndarray]:
     """Read all momentum datasets in a gamma group."""
-    return {
-        key: apply_resampling(
-            np.swapaxes(np.asarray(group[key]), 0, 1),
+    data_by_momentum: dict[str, np.ndarray] = {}
+    for key in group.keys():
+        data = np.swapaxes(np.asarray(group[key]), 0, 1)
+        if threshold is not None:
+            data = bad_point_filter(data, threshold=threshold)
+        data = apply_resampling(
+            data,
             resampling,
             sample_axis=0,
             n_samples=n_samples,
             bin_size=bin_size,
             seed=seed,
         )
-        for key in group.keys()
-    }
+        if normalization:
+            data = _normalize_by_t0_sample_mean(data)
+        data_by_momentum[key] = data
+    return data_by_momentum
+
+
+def _normalize_by_t0_sample_mean(data: np.ndarray) -> np.ndarray:
+    """Normalize a sample-first 2pt array by the sample mean at t=0."""
+    arr = np.asarray(data)
+    if arr.ndim != 2:
+        raise ValueError(f"pt2 data must be a 2D array, got shape {arr.shape}")
+
+    norm = np.mean(arr[:, 0])
+    if norm == 0:
+        raise ZeroDivisionError("sample mean at t=0 is zero")
+    return arr / norm
 
 
 def pt2_to_meff(pt2_array: np.ndarray, boundary: str = "periodic") -> np.ndarray:

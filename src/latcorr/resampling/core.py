@@ -6,6 +6,18 @@ import gvar as gv
 import numpy as np
 
 
+def bad_point_filter(data: np.ndarray, threshold: float = 1) -> np.ndarray:
+    """Replace entries with absolute value above threshold by random signs."""
+    filtered = np.array(data, copy=True)
+    mask = np.abs(filtered) > threshold
+    bad_loc = np.argwhere(mask)
+
+    for loc in bad_loc:
+        filtered[tuple(loc)] = np.random.choice([-1, 1])
+
+    return filtered
+
+
 def bin_data(data: np.ndarray, bin_size: int, axis: int = 0) -> np.ndarray:
     """Average adjacent configurations into bins.
 

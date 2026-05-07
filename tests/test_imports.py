@@ -18,6 +18,20 @@ def test_core_subpackages_import():
     assert utils is not None
     assert correlators.read_pt2_h5 is not None
     assert correlators.read_pt3_h5 is not None
-    assert correlators.get_ratio_data is not None
+    assert correlators.get_qda_ratio_data is not None
+    assert correlators.get_pt3_ratio_data is not None
     assert correlators.get_sum_data is not None
     assert correlators.get_fh_data is not None
+    assert plotting.pt3_ratio_plot is not None
+    assert plotting.qda_ratio_plot is not None
+    assert ground_state.general_prior is not None
+    assert ground_state.pt2_re_fcn is not None
+    assert ground_state.pt3_ratio_re_fcn is not None
+    assert ground_state.pt3_ratio_im_fcn is not None
+    assert ground_state.sum_re_fcn is not None
+    assert ground_state.sum_im_fcn is not None
+    assert ground_state.fh_re_fcn is not None
+    assert ground_state.fh_im_fcn is not None
+    assert ground_state.qda_re_fcn is not None
+    assert ground_state.qda_im_fcn is not None
+    assert ground_state.ff_ratio_fcn is not None
