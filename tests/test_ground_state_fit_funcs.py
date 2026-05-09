@@ -3,6 +3,7 @@ import pytest
 
 from latcorr.ground_state import (
     ff_ratio_fcn,
+    ff_sum_fcn,
     fh_im_fcn,
     fh_re_fcn,
     general_prior,
@@ -457,6 +458,27 @@ def test_ff_ratio_fcn_matches_lametlat_formula_with_clear_names():
     )
 
     np.testing.assert_allclose(ff_ratio_fcn((ra_t, ra_tau), p), expected)
+
+
+def test_ff_sum_fcn_matches_explicit_tau_average():
+    tau_cut = 2
+    t = np.array([8, 10])
+    p = {
+        "dE1": 0.25,
+        "ff": 0.6,
+        "ff_excited_coeff": 0.15,
+        "ff_den_exp_coeff": 0.05,
+    }
+    expected = []
+    for t_val in t:
+        acc = 0.0
+        for tau in range(tau_cut, int(t_val) + 1 - tau_cut):
+            acc += float(
+                ff_ratio_fcn((float(t_val), float(tau)), p),
+            )
+        expected.append(acc / (t_val - 2 * tau_cut + 1))
+    np.testing.assert_allclose(ff_sum_fcn(t, tau_cut, p), expected)
+    np.testing.assert_allclose(ff_sum_fcn(8, tau_cut, p), expected[0])
 
 
 @pytest.mark.parametrize("fcn", [sum_re_fcn, sum_im_fcn, fh_re_fcn, fh_im_fcn])

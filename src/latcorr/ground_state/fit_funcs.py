@@ -278,10 +278,11 @@ def ff_ratio_fcn(
 ) -> float | np.ndarray:
     """Compute the two-state form-factor ratio fit function."""
     ra_t, ra_tau = x
-    dE = p["dE1"]
+    dE = p["dE1"] if "dE1" in p else np.exp(p["log(dE1)"])
+    ff = p["ff"] if "ff" in p else np.exp(p["log(ff)"])
 
     return (
-        -p["ff"]
+        -ff
         * (
             1
             + p["ff_excited_coeff"]
@@ -289,3 +290,27 @@ def ff_ratio_fcn(
         )
         / (1 + p["ff_den_exp_coeff"] * np.exp(-dE * ra_t / 2))
     )
+
+
+def _ff_sum_avg_at_t(t_val: float, tau_cut: int, p: dict) -> float | np.ndarray:
+    width = t_val - 2 * tau_cut + 1
+    if width <= 0:
+        raise ValueError(
+            "ff_sum_fcn requires t >= 2 * tau_cut - 1 for a non-empty tau sum"
+        )
+    taus = np.arange(tau_cut, int(t_val) + 1 - tau_cut, dtype=float)
+    return np.sum(ff_ratio_fcn((t_val, taus), p)) / width
+
+
+def ff_sum_fcn(
+    t: float | np.ndarray,
+    tau_cut: int,
+    p: dict,
+) -> float | np.ndarray:
+    """Compute the tau-averaged two-state form-factor ratio fit function."""
+    t_arr = np.asarray(t)
+    if t_arr.ndim == 0:
+        return _ff_sum_avg_at_t(float(t_arr.item()), tau_cut, p)
+    stacked = [_ff_sum_avg_at_t(float(tv), tau_cut, p) for tv in t_arr.ravel()]
+    return np.asarray(stacked).reshape(t_arr.shape)
+

@@ -21,25 +21,19 @@ def _two_state_prior():
     return prior
 
 
-def test_pt2_fit_returns_lsqfit_result_with_metadata():
+def test_pt2_fit_returns_lsqfit_result():
     Lt = 32
-    trange = (3, 12)
     pt2_avg = _two_state_mock_data(Lt=Lt)
 
     fit = pt2_fit(
         pt2_avg,
-        trange,
+        3,
+        12,
         Lt,
         prior=_two_state_prior(),
-        normalize=False,
         label="mock",
     )
 
-    np.testing.assert_array_equal(fit.trange, np.arange(*trange))
-    assert fit.Lt == Lt
-    assert fit.nstate == 2
-    assert fit.normalization_factor == 1.0
-    assert fit.label == "mock"
     assert fit.dof > 0
     assert 0 <= fit.Q <= 1
 
@@ -47,10 +41,10 @@ def test_pt2_fit_returns_lsqfit_result_with_metadata():
 def test_pt2_two_state_fit_uses_log_gap_prior_directly():
     fit = pt2_two_state_fit(
         _two_state_mock_data(),
-        (3, 12),
+        3,
+        12,
         32,
         prior=_two_state_prior(),
-        normalize=False,
     )
 
     assert fit.p["dE1"].mean > 0

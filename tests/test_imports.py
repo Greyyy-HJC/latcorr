@@ -35,3 +35,7 @@ def test_core_subpackages_import():
     assert ground_state.qda_re_fcn is not None
     assert ground_state.qda_im_fcn is not None
     assert ground_state.ff_ratio_fcn is not None
+    assert ground_state.ff_sum_fcn is not None
+    assert ground_state.ff_ratio_two_state_fit is not None
+    assert ground_state.ff_sum_two_state_fit is not None
+    assert ground_state.ff_joint_two_state_fit is not None

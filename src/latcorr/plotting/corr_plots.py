@@ -99,12 +99,21 @@ def pt2_plot(
     trange: tuple[int, int] | Sequence[int] | np.ndarray | None = None,
     *,
     fit_results: object | Sequence[object] | None = None,
-    fit_trange: tuple[int, int] | Sequence[int] | np.ndarray | None = None,
+    fit_tmin: int | None = None,
+    fit_tmax: int | None = None,
+    fit_label: str = "Fit",
+    Lt: int | None = None,
     save_prefix: str | None = None,
     out_dir: str | Path | None = None,
     show: bool = False,
 ) -> tuple[tuple[Figure, Axes], tuple[Figure, Axes]]:
-    """Plot C2pt and effective mass from resampled pt2 data."""
+    """Plot C2pt and effective mass from resampled pt2 data.
+
+    When ``fit_results`` is given, pass ``fit_tmin`` and ``fit_tmax`` using the
+    same half-open window as ``pt2_fit(..., tmin, tmax, Lt, ...)`` (times
+    ``tmin <= t < tmax``). Optional ``Lt`` defaults to the correlator length;
+    set it if that differs from the temporal extent used in the fit.
+    """
 
     # check if all pt2_gv arrays have the same length
     lengths = [len(pt2_gv) for pt2_gv in pt2_gv_ls]
@@ -116,6 +125,13 @@ def pt2_plot(
 
     t = _trange_to_array(trange, default_stop=lengths[0], data_length=lengths[0])
     fits = _fit_result_list(fit_results)
+    fit_lt = lengths[0] if Lt is None else Lt
+
+    if fits and (fit_tmin is None or fit_tmax is None):
+        raise ValueError(
+            "pt2_plot: fit_results requires fit_tmin and fit_tmax "
+            "(same as pt2_fit pt2_avg, tmin, tmax, ...)."
+        )
 
     fig_c2, ax_c2 = default_plot()
     for idx, pt2_gv in enumerate(pt2_gv_ls):
@@ -145,22 +161,22 @@ def pt2_plot(
 
     for idx, fit_result in enumerate(fits):
         color = COLOR_CYCLE[idx % len(COLOR_CYCLE)]
-        if fit_trange is None:
-            raw_fit_t = getattr(fit_result, "trange", t)
-            fit_t = np.asarray(raw_fit_t, dtype=int)
-        else:
-            fit_t = _trange_to_array(fit_trange, name="fit_trange")
+        fit_t = np.arange(fit_tmin, fit_tmax, dtype=int)
+        if np.any(fit_t < 0) or np.any(fit_t >= lengths[0]):
+            raise ValueError(
+                f"fit window [{fit_tmin}, {fit_tmax}) must lie within "
+                f"data length {lengths[0]}"
+            )
 
         fit_y = pt2_re_fcn(
             fit_t,
             fit_result.p,
-            getattr(fit_result, "Lt", lengths[0]),
+            fit_lt,
             nstate=_fit_nstate(fit_result),
         )
-        fit_y = fit_y * getattr(fit_result, "normalization_factor", 1.0)
         fit_mean = gv.mean(fit_y)
         fit_sdev = gv.sdev(fit_y)
-        fit_label = getattr(fit_result, "label", None) or "Fit"
+        legend_label = fit_label if len(fits) == 1 else f"{fit_label} ({idx + 1})"
 
         positive_mean = fit_mean > 0
         if np.any(positive_mean):
@@ -168,7 +184,7 @@ def pt2_plot(
                 fit_t[positive_mean],
                 fit_mean[positive_mean],
                 color=color,
-                label=fit_label,
+                label=legend_label,
             )
         positive_band = (fit_mean - fit_sdev > 0) & (fit_mean + fit_sdev > 0)
         if np.any(positive_band):
@@ -185,7 +201,7 @@ def pt2_plot(
             _meff_trange(fit_t, boundary),
             gv.mean(fit_meff),
             color=color,
-            label=fit_label,
+            label=legend_label,
         )
         ax_meff.fill_between(
             _meff_trange(fit_t, boundary),

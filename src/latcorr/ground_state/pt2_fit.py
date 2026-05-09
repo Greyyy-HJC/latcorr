@@ -2,43 +2,13 @@
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Sequence
-
 import gvar as gv
 import lsqfit as lsf
 import numpy as np
 
+from latcorr.utils.logger import log_nonlinear_fit_quality
+
 from .fit_funcs import general_prior, pt2_re_fcn
-
-logger = logging.getLogger(__name__)
-
-
-def _trange_to_array(
-    trange: tuple[int, int] | Sequence[int] | np.ndarray,
-    *,
-    data_length: int | None = None,
-) -> np.ndarray:
-    if isinstance(trange, tuple):
-        if len(trange) != 2:
-            raise ValueError("trange tuple must be (tmin, tmax)")
-        tmin, tmax = trange
-        values = np.arange(tmin, tmax, dtype=int)
-    else:
-        values = np.asarray(trange, dtype=int)
-
-    if values.ndim != 1:
-        raise ValueError(f"trange must be one-dimensional, got shape {values.shape}")
-    if values.size == 0:
-        raise ValueError("trange must contain at least one time slice")
-    if np.any(values < 0):
-        raise ValueError("trange must not contain negative time slices")
-    if data_length is not None and np.any(values >= data_length):
-        raise ValueError(
-            f"trange contains time slices outside data length {data_length}: {values}"
-        )
-
-    return values
 
 
 def _pt2_prior(nstate: int) -> gv.BufferDict:
@@ -54,12 +24,12 @@ def _pt2_prior(nstate: int) -> gv.BufferDict:
 
 def pt2_fit(
     pt2_avg: np.ndarray,
-    trange: tuple[int, int] | Sequence[int] | np.ndarray,
+    tmin: int,
+    tmax: int,
     Lt: int,
     *,
     nstate: int = 2,
     prior: gv.BufferDict | dict[str, gv.GVar] | None = None,
-    normalize: bool = True,
     label: str | None = None,
     maxit: int = 10000,
 ) -> lsf.nonlinear_fit:
@@ -69,17 +39,16 @@ def pt2_fit(
     if pt2_avg.ndim != 1:
         raise ValueError(f"pt2_avg must be one-dimensional, got shape {pt2_avg.shape}")
 
-    fit_t = _trange_to_array(trange, data_length=len(pt2_avg))
-    priors = _pt2_prior(nstate=nstate) if prior is None else prior
+    fit_t = np.arange(tmin, tmax, dtype=int)
+    if fit_t.size == 0:
+        raise ValueError("fit window must contain at least one slice (require tmax > tmin)")
+    if np.any(fit_t < 0) or np.any(fit_t >= len(pt2_avg)):
+        raise ValueError(
+            f"fit window [{tmin}, {tmax}) must lie within data length {len(pt2_avg)}"
+        )
 
-    normalization_factor = 1.0
-    if normalize:
-        normalization_factor = abs(pt2_avg[0].mean)
-        if normalization_factor == 0:
-            raise ZeroDivisionError("cannot normalize pt2 data with zero t=0 mean")
-        fit_pt2 = pt2_avg[fit_t] / normalization_factor
-    else:
-        fit_pt2 = pt2_avg[fit_t]
+    priors = _pt2_prior(nstate=nstate) if prior is None else prior
+    fit_pt2 = pt2_avg[fit_t]
 
     def fcn(t: np.ndarray, p: dict) -> np.ndarray:
         return pt2_re_fcn(t, p, Lt, nstate=nstate)
@@ -91,30 +60,18 @@ def pt2_fit(
         maxit=maxit,
     )
 
-    fit_res.trange = fit_t
-    fit_res.Lt = Lt
-    fit_res.nstate = nstate
-    fit_res.normalize = normalize
-    fit_res.normalization_factor = normalization_factor
-    fit_res.label = label
-
-    fit_label = f" {label}" if label else ""
-    fit_quality = f"Q = {fit_res.Q:.3f}, Chi2/dof = {fit_res.chi2 / fit_res.dof:.3f}"
-    if fit_res.Q < 0.05:
-        logger.warning("Bad 2pt%s fit with %s", fit_label, fit_quality)
-    else:
-        logger.info("Good 2pt%s fit with %s", fit_label, fit_quality)
+    log_nonlinear_fit_quality(fit_res, kind="2pt", label=label)
 
     return fit_res
 
 
 def pt2_two_state_fit(
     pt2_avg: np.ndarray,
-    trange: tuple[int, int] | Sequence[int] | np.ndarray,
+    tmin: int,
+    tmax: int,
     Lt: int,
     *,
     prior: gv.BufferDict | dict[str, gv.GVar] | None = None,
-    normalize: bool = True,
     label: str | None = None,
     maxit: int = 10000,
 ) -> lsf.nonlinear_fit:
@@ -122,11 +79,11 @@ def pt2_two_state_fit(
 
     return pt2_fit(
         pt2_avg,
-        trange,
+        tmin,
+        tmax,
         Lt,
         nstate=2,
         prior=prior,
-        normalize=normalize,
         label=label,
         maxit=maxit,
     )

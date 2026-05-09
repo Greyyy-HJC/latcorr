@@ -2,6 +2,7 @@
 
 from .fit_funcs import (
     ff_ratio_fcn,
+    ff_sum_fcn,
     fh_im_fcn,
     fh_re_fcn,
     general_prior,
@@ -13,10 +14,15 @@ from .fit_funcs import (
     sum_im_fcn,
     sum_re_fcn,
 )
+from .ff_fit import ff_joint_two_state_fit, ff_ratio_two_state_fit, ff_sum_two_state_fit
 from .pt2_fit import pt2_fit, pt2_two_state_fit
 
 __all__ = [
+    "ff_joint_two_state_fit",
     "ff_ratio_fcn",
+    "ff_ratio_two_state_fit",
+    "ff_sum_fcn",
+    "ff_sum_two_state_fit",
     "fh_im_fcn",
     "fh_re_fcn",
     "general_prior",
@@ -30,3 +36,4 @@ __all__ = [
     "pt2_fit",
     "pt2_two_state_fit",
 ]
+

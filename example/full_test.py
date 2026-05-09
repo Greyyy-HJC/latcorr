@@ -109,10 +109,10 @@ tau_dict = {tsep: np.arange(tsep + 2) for tsep in TSEP_FILES}
 
 pt2_fit_res = pt2_fit(
     pt2_gv,
-    (3, 14),
+    3,
+    14,
     LT,
     prior=priors(),
-    normalize=False,
     label="2-state fit",
 )
 
@@ -121,7 +121,10 @@ pt2_plot(
     boundary="periodic",
     trange=(1, 18),
     fit_results=pt2_fit_res,
-    fit_trange=(2, 18),
+    fit_tmin=3,
+    fit_tmax=14,
+    Lt=LT,
+    fit_label="2-state fit",
     save_prefix="pt2",
     out_dir=PLOT_DIR,
 )

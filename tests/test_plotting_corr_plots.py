@@ -47,13 +47,15 @@ def test_pt2_plot_draws_fit_overlay():
     prior["log(dE1)"] = gv.gvar(np.log(0.55), 0.4)
     prior["z0"] = gv.gvar(1.1, 0.4)
     prior["z1"] = gv.gvar(0.45, 0.4)
-    fit = pt2_fit(pt2_avg, (3, 12), Lt, prior=prior, normalize=False, label="Fit")
+    fit = pt2_fit(pt2_avg, 3, 12, Lt, prior=prior, label="Fit")
 
     (fig_c2, ax_c2), (fig_meff, ax_meff) = pt2_plot(
         [pt2_avg],
         trange=(2, 14),
         fit_results=fit,
-        fit_trange=(3, 12),
+        fit_tmin=3,
+        fit_tmax=12,
+        fit_label="Fit",
     )
 
     assert ax_c2.get_yscale() == "log"

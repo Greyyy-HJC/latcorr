@@ -20,6 +20,26 @@ import sys
 from pathlib import Path
 
 
+def log_nonlinear_fit_quality(
+    fit_res: object,
+    *,
+    kind: str,
+    label: str | None = None,
+    logger_name: str = "my_logger",
+    q_threshold: float = 0.05,
+) -> None:
+    """Log INFO/WARNING for an ``lsqfit.nonlinear_fit`` result using Q and chi²/dof."""
+    log = logging.getLogger(logger_name)
+    fit_label = f" {label}" if label else ""
+    fit_quality = (
+        f"Q = {fit_res.Q:.3f}, Chi2/dof = {fit_res.chi2 / fit_res.dof:.3f}"
+    )
+    if fit_res.Q < q_threshold:
+        log.warning(">>> Bad %s%s fit with %s", kind, fit_label, fit_quality)
+    else:
+        log.info(">>> Good %s%s fit with %s", kind, fit_label, fit_quality)
+
+
 def setup_logger(
     log_file: str | Path,
     console_output: bool = False,
