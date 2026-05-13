@@ -60,6 +60,21 @@ There is also a nucleon 2pt stripping example that averages multiple sources
 per configuration before writing the stripped ensemble HDF5 file.
 For the larger 3pt TMDPDF workflow, see `example/preprocess/strip_nucleon_tmdpdf.py`.
 
+For a lightweight ground-state fit demo, first generate fake HDF5 data:
+
+```bash
+python example/generate_fake_data.py
+```
+
+Then run:
+
+```bash
+python example/gsfit_test.py
+```
+
+The script reads the fake 2pt, 3pt ratio, qDA, and FH data, performs the
+corresponding fits, and writes data-plus-fit plots under `example/plots/gsfit/`.
+
 ## Development
 
 Run tests with:
