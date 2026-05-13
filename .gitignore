@@ -8,6 +8,7 @@ build/
 dist/
 uv.lock
 **/temp.py
+**/my_logger.log
 
 # Virtual environments
 .venv/

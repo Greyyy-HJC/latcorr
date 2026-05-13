@@ -1,15 +1,9 @@
 """End-to-end example using the lightweight fake HDF5 data."""
-
+# %%
 from __future__ import annotations
-
-import os
-import sys
 from pathlib import Path
 
-os.environ.setdefault(
-    "MPLCONFIGDIR",
-    str(Path(__file__).resolve().parent / "plots" / ".matplotlib-cache"),
-)
+PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
 
 import matplotlib
 
@@ -19,22 +13,23 @@ import gvar as gv
 import matplotlib.pyplot as plt
 import numpy as np
 
-PROJECT_SRC = Path(__file__).resolve().parents[1] / "src"
-if str(PROJECT_SRC) not in sys.path:
-    sys.path.insert(0, str(PROJECT_SRC))
 
 from latcorr.correlators import (  # noqa: E402
+    get_fh_data,
     get_pt3_ratio_data,
     get_qda_ratio_data,
     read_pt2_h5,
     read_pt3_h5,
     read_qda_h5,
 )
-from latcorr.ground_state import pt2_fit  # noqa: E402
-from latcorr.plotting import pt2_plot, pt3_ratio_plot, qda_ratio_plot  # noqa: E402
+from latcorr.ground_state import fh_fit, pt2_fit, pt3_ratio_fit, qda_fit  # noqa: E402
+from latcorr.plotting import fh_plot, pt2_plot, pt3_ratio_plot, qda_ratio_plot  # noqa: E402
 from latcorr.resampling import bs_dict_avg, bs_ls_avg  # noqa: E402
+from latcorr.utils.logger import setup_logger
 
+setup_logger("./my_logger.log")
 
+#! presettings
 def priors() -> gv.BufferDict:
     prior = gv.BufferDict()
     prior["E0"] = gv.gvar(0.45, 0.12)
@@ -44,8 +39,36 @@ def priors() -> gv.BufferDict:
     return prior
 
 
+def pt3_priors() -> gv.BufferDict:
+    prior = priors()
+    prior["O00_re"] = gv.gvar(0.25, 0.30)
+    prior["O01_re"] = gv.gvar(0.0, 0.50)
+    prior["O11_re"] = gv.gvar(0.0, 0.50)
+    prior["O00_im"] = gv.gvar(0.02, 0.10)
+    prior["O01_im"] = gv.gvar(0.0, 0.20)
+    prior["O11_im"] = gv.gvar(0.0, 0.20)
+    return prior
+
+
+def qda_priors() -> gv.BufferDict:
+    prior = priors()
+    prior["O00_re"] = gv.gvar(3.0e9, 3.0e9)
+    prior["O01_re"] = gv.gvar(-8.0e9, 8.0e9)
+    prior["O00_im"] = gv.gvar(0.0, 1.0e8)
+    prior["O01_im"] = gv.gvar(0.0, 1.0e8)
+    return prior
+
+
+def fh_priors() -> gv.BufferDict:
+    prior = gv.BufferDict()
+    prior["E0"] = gv.gvar(0.45, 0.12)
+    prior["O00_re"] = gv.gvar(0.25, 0.30)
+    prior["O00_im"] = gv.gvar(0.02, 0.10)
+    return prior
+
+#! read fake data files
 DATA_DIR = Path(__file__).resolve().parent / "data"
-PLOT_DIR = Path(__file__).resolve().parent / "plots" / "full_test"
+PLOT_DIR = Path(__file__).resolve().parent / "plots" / "gsfit"
 PLOT_DIR.mkdir(parents=True, exist_ok=True)
 
 LT = 32
@@ -63,7 +86,7 @@ pt2 = read_pt2_h5(
     source_sink="SS",
     gamma="5",
     momentum="PX0PY0PZ0",
-    resampling="bs",
+    resampling="bs", # bootstrap
     n_samples=N_BOOT,
     seed=BOOT_SEED,
 )
@@ -88,6 +111,8 @@ pt3 = {
 }
 
 pt2_gv = bs_ls_avg(np.asarray(pt2.real, dtype=float), axis=0)
+qda_real_gv = bs_ls_avg(np.asarray(qda.real, dtype=float), axis=0)
+qda_imag_gv = bs_ls_avg(np.asarray(qda.imag, dtype=float), axis=0)
 qda_ratio_real, qda_ratio_imag = get_qda_ratio_data(
     pt2.real,
     pt2.imag,
@@ -107,15 +132,61 @@ pt3_ratio_real_gv = bs_dict_avg(pt3_ratio_real)
 pt3_ratio_imag_gv = bs_dict_avg(pt3_ratio_imag)
 tau_dict = {tsep: np.arange(tsep + 2) for tsep in TSEP_FILES}
 
+fh_real, fh_imag = get_fh_data(
+    pt2.real,
+    pt2.imag,
+    {tsep: data.real for tsep, data in pt3.items()},
+    {tsep: data.imag for tsep, data in pt3.items()},
+    tau_cut=1,
+)
+fh_real_gv = bs_ls_avg(np.asarray(fh_real, dtype=float), axis=0)
+fh_imag_gv = bs_ls_avg(np.asarray(fh_imag, dtype=float), axis=0)
+tsep_ls = sorted(TSEP_FILES)
+fh_tsep_ls = tsep_ls[:-1]
+
+#! ground state fit
 pt2_fit_res = pt2_fit(
     pt2_gv,
-    3,
-    14,
-    LT,
+    tmin=5,
+    tmax=14,
+    Lt=LT,
     prior=priors(),
     label="2-state fit",
 )
+pt3_fit_res = pt3_ratio_fit(
+    tsep_ls=[6, 8, 10],
+    tau_cut=3,
+    ratio_real=pt3_ratio_real_gv,
+    ratio_imag=pt3_ratio_imag_gv,
+    Lt=LT,
+    prior=pt3_priors(),
+    pt2_fit_res=pt2_fit_res,
+    label="3pt ratio fit",
+)
+qda_fit_res = qda_fit(
+    qda_real_gv,
+    qda_imag_gv,
+    5,
+    12,
+    LT,
+    prior=qda_priors(),
+    pt2_fit_res=None,
+    label="qDA fit",
+    part="re",
+)
+fh_fit_res = fh_fit(
+    fh_real_gv,
+    fh_imag_gv,
+    tsep_ls,
+    0,
+    nstate=1,
+    prior=fh_priors(),
+    pt2_fit_res=pt2_fit_res,
+    label="FH fit",
+    dt=2,
+)
 
+#! plot fit results on data
 pt2_plot(
     [pt2_gv],
     boundary="periodic",
@@ -133,6 +204,11 @@ pt2_plot(
     np.arange(13),
     qda_ratio_real_gv[:13],
     qda_ratio_imag_gv[:13],
+    fit_result=qda_fit_res,
+    pt2_fit_result=pt2_fit_res,
+    fit_trange=np.arange(5, 12),
+    fit_label="qDA fit",
+    Lt=LT,
     id_label={"fake": "qDA", "bT": 0, "bz": 0},
 )
 fig_qda_re.savefig(PLOT_DIR / "qda_ratio_real.pdf", bbox_inches="tight", transparent=True)
@@ -144,12 +220,33 @@ plt.close(fig_qda_im)
     tau_dict,
     pt3_ratio_real_gv,
     pt3_ratio_imag_gv,
+    fit_result=pt3_fit_res,
+    fit_tsep_ls=tsep_ls,
+    fit_tau_cut=1,
+    fit_label="3pt ratio fit",
+    Lt=LT,
 )
 fig_pt3_re.savefig(PLOT_DIR / "pt3_ratio_real.pdf", bbox_inches="tight", transparent=True)
 fig_pt3_im.savefig(PLOT_DIR / "pt3_ratio_imag.pdf", bbox_inches="tight", transparent=True)
 plt.close(fig_pt3_re)
 plt.close(fig_pt3_im)
 
+(fig_fh_re, _), (fig_fh_im, _) = fh_plot(
+    fh_tsep_ls,
+    fh_real_gv,
+    fh_imag_gv,
+    fit_result=fh_fit_res,
+    fit_tsep_ls=fh_tsep_ls,
+    fit_tau_cut=1,
+    fit_label="FH fit",
+    dt=2,
+)
+fig_fh_re.savefig(PLOT_DIR / "fh_real.pdf", bbox_inches="tight", transparent=True)
+fig_fh_im.savefig(PLOT_DIR / "fh_imag.pdf", bbox_inches="tight", transparent=True)
+plt.close(fig_fh_re)
+plt.close(fig_fh_im)
+
+#! print summary
 print("Read bootstrap shapes:")
 print(f"  pt2: {pt2.shape}")
 print(f"  qda: {qda.shape}")
@@ -157,4 +254,15 @@ print(f"  pt3: { {tsep: data.shape for tsep, data in pt3.items()} }")
 print("2pt fit:")
 print(f"  Q = {pt2_fit_res.Q:.3f}")
 print(f"  chi2/dof = {pt2_fit_res.chi2 / pt2_fit_res.dof:.3f}")
+print("3pt ratio fit:") # this is a bad fit just because the fake data of 3pt is bad
+print(f"  Q = {pt3_fit_res.Q:.3f}")
+print(f"  chi2/dof = {pt3_fit_res.chi2 / pt3_fit_res.dof:.3f}")
+print("qDA fit:")
+print(f"  Q = {qda_fit_res.Q:.3f}")
+print(f"  chi2/dof = {qda_fit_res.chi2 / qda_fit_res.dof:.3f}")
+print("FH fit:")
+print(f"  Q = {fh_fit_res.Q:.3f}")
+print(f"  chi2/dof = {fh_fit_res.chi2 / fh_fit_res.dof:.3f}")
 print(f"Wrote plots to {PLOT_DIR}")
+
+# %%

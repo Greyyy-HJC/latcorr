@@ -24,16 +24,30 @@ def test_core_subpackages_import():
     assert correlators.get_fh_data is not None
     assert plotting.pt3_ratio_plot is not None
     assert plotting.qda_ratio_plot is not None
+    assert plotting.ff_ratio_plot is not None
+    assert plotting.ff_sum_plot is not None
+    assert plotting.ff_joint_plot is not None
     assert ground_state.general_prior is not None
     assert ground_state.pt2_re_fcn is not None
     assert ground_state.pt3_ratio_re_fcn is not None
     assert ground_state.pt3_ratio_im_fcn is not None
+    assert ground_state.pt3_ratio_fh_joint_fit is not None
+    assert ground_state.pt3_ratio_fit is not None
+    assert ground_state.pt3_ratio_two_state_fit is not None
+    assert ground_state.pt3_ratio_two_state_fh_one_state_fit is not None
     assert ground_state.sum_re_fcn is not None
     assert ground_state.sum_im_fcn is not None
     assert ground_state.fh_re_fcn is not None
     assert ground_state.fh_im_fcn is not None
+    assert ground_state.fh_fit is not None
+    assert ground_state.fh_one_state_fit is not None
+    assert ground_state.fh_two_state_fit is not None
     assert ground_state.qda_re_fcn is not None
     assert ground_state.qda_im_fcn is not None
+    assert ground_state.qda_fit is not None
+    assert ground_state.qda_two_state_fit is not None
+    assert ground_state.qda_joint_fit is not None
+    assert ground_state.qda_two_state_joint_fit is not None
     assert ground_state.ff_ratio_fcn is not None
     assert ground_state.ff_sum_fcn is not None
     assert ground_state.ff_ratio_two_state_fit is not None

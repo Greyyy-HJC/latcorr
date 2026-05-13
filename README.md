@@ -68,6 +68,14 @@ Run tests with:
 python -m pytest
 ```
 
+## How to contribute
+
+Create a new branch for each change, make the edits there, and open a pull
+request for review. Keep each PR focused on one topic, include tests when the
+change affects behavior, and mention any checks you ran. Project collaborators
+may merge their own PRs into `main` after review requirements and relevant
+checks are satisfied.
+
 ## Code Style
 
 - Prefer simple functions and NumPy operations over early abstractions.

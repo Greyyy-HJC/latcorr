@@ -11,7 +11,17 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
 from latcorr.correlators import pt2_to_meff
-from latcorr.ground_state import pt2_re_fcn
+from latcorr.ground_state import (
+    ff_ratio_fcn,
+    ff_sum_fcn,
+    fh_im_fcn,
+    fh_re_fcn,
+    pt2_re_fcn,
+    pt3_ratio_im_fcn,
+    pt3_ratio_re_fcn,
+    qda_im_fcn,
+    qda_re_fcn,
+)
 
 from .plot_settings import (
     COLOR_CYCLE,
@@ -38,27 +48,12 @@ def _trange_to_array(
     name: str = "trange",
 ) -> np.ndarray:
     if trange is None:
-        if default_stop is None:
-            raise ValueError(f"{name} is required")
         values = np.arange(default_stop, dtype=int)
     elif isinstance(trange, tuple):
-        if len(trange) != 2:
-            raise ValueError(f"{name} tuple must be (tmin, tmax)")
         tmin, tmax = trange
         values = np.arange(tmin, tmax, dtype=int)
     else:
         values = np.asarray(trange, dtype=int)
-
-    if values.ndim != 1:
-        raise ValueError(f"{name} must be one-dimensional, got shape {values.shape}")
-    if values.size == 0:
-        raise ValueError(f"{name} must contain at least one time slice")
-    if np.any(values < 0):
-        raise ValueError(f"{name} must not contain negative time slices")
-    if data_length is not None and np.any(values >= data_length):
-        raise ValueError(
-            f"{name} contains time slices outside data length {data_length}: {values}"
-        )
 
     return values
 
@@ -66,9 +61,7 @@ def _trange_to_array(
 def _meff_trange(trange: np.ndarray, boundary: str) -> np.ndarray:
     if boundary in {"periodic", "anti-periodic"}:
         return trange[1:-1]
-    if boundary == "none":
-        return trange[:-1]
-    raise ValueError(f"unsupported boundary mode: {boundary!r}")
+    return trange[:-1]
 
 
 def _fit_result_list(fit_results: object | Sequence[object] | None) -> list[object]:
@@ -93,6 +86,13 @@ def _fit_nstate(fit_result: object) -> int:
     return 2
 
 
+def _fh_fit_nstate(fit_result: object) -> int:
+    params = getattr(fit_result, "p", {})
+    if "sum_den_exp_coeff" in params:
+        return 2
+    return 1
+
+
 def pt2_plot(
     pt2_gv_ls: list[np.ndarray],
     boundary: str = "none",
@@ -115,17 +115,10 @@ def pt2_plot(
     set it if that differs from the temporal extent used in the fit.
     """
 
-    # check if all pt2_gv arrays have the same length
-    lengths = [len(pt2_gv) for pt2_gv in pt2_gv_ls]
-    if not all(l == lengths[0] for l in lengths):
-        raise ValueError(
-            "All pt2_gv arrays in pt2_gv_ls must have the same length, "
-            f"got lengths: {lengths}"
-        )
-
-    t = _trange_to_array(trange, default_stop=lengths[0], data_length=lengths[0])
+    data_length = len(pt2_gv_ls[0])
+    t = _trange_to_array(trange, default_stop=data_length, data_length=data_length)
     fits = _fit_result_list(fit_results)
-    fit_lt = lengths[0] if Lt is None else Lt
+    fit_lt = data_length if Lt is None else Lt
 
     if fits and (fit_tmin is None or fit_tmax is None):
         raise ValueError(
@@ -162,12 +155,6 @@ def pt2_plot(
     for idx, fit_result in enumerate(fits):
         color = COLOR_CYCLE[idx % len(COLOR_CYCLE)]
         fit_t = np.arange(fit_tmin, fit_tmax, dtype=int)
-        if np.any(fit_t < 0) or np.any(fit_t >= lengths[0]):
-            raise ValueError(
-                f"fit window [{fit_tmin}, {fit_tmax}) must lie within "
-                f"data length {lengths[0]}"
-            )
-
         fit_y = pt2_re_fcn(
             fit_t,
             fit_result.p,
@@ -241,35 +228,140 @@ def pt3_ratio_plot(
     ratio_real: dict[int, np.ndarray],
     ratio_imag: dict[int, np.ndarray] | None = None,
     *,
+    fit_result: object | None = None,
+    fit_tsep_ls: Sequence[int] | None = None,
+    fit_tau_cut: int = 1,
+    fit_label: str = "Fit",
+    Lt: int | None = None,
     save_path: str | Path | None = None,
     show: bool = False,
 ) -> tuple[Figure, Axes]:
     """Plot 3pt ratio vs tau for each tsep from precomputed arrays."""
     
     tsep_ls = sorted(ratio_real.keys())
+    fit_lt = max(tsep_ls) + 1 if Lt is None else Lt
+    nstate = 2 if fit_result is None else _fit_nstate(fit_result)
     
     fig_real, ax_real = default_plot()
+    y_data_re: list[np.ndarray] = []
+    yerr_re: list[np.ndarray] = []
     for tsep in tsep_ls:
-        ax_real.errorbar(tau_dict[tsep] - tsep/2, gv.mean(ratio_real[tsep]), yerr=gv.sdev(ratio_real[tsep]), label=f"{TSEP}={tsep} $a$", **ERRORBAR_CIRCLE_STYLE)
+        y_mean = gv.mean(ratio_real[tsep])
+        y_sdev = gv.sdev(ratio_real[tsep])
+        ax_real.errorbar(tau_dict[tsep] - tsep/2, y_mean, yerr=y_sdev, label=f"{TSEP}={tsep} $a$", **ERRORBAR_CIRCLE_STYLE)
+        y_data_re.append(np.asarray(y_mean, dtype=float))
+        yerr_re.append(np.asarray(y_sdev, dtype=float))
+
+    if fit_result is not None:
+        fit_tseps = list(tsep_ls if fit_tsep_ls is None else fit_tsep_ls)
+        for tsep in fit_tseps:
+            idx = tsep_ls.index(tsep)
+            color = COLOR_CYCLE[idx % len(COLOR_CYCLE)]
+            fit_tau = np.linspace(fit_tau_cut - 0.5, tsep - fit_tau_cut + 0.5, 200)
+            fit_t = np.full_like(fit_tau, float(tsep))
+            fit_ratio = pt3_ratio_re_fcn(fit_t, fit_tau, fit_result.p, fit_lt, nstate=nstate)
+            fit_mean = gv.mean(fit_ratio)
+            fit_sdev = gv.sdev(fit_ratio)
+            fit_x = fit_tau - tsep / 2
+            ax_real.fill_between(
+                fit_x,
+                fit_mean - fit_sdev,
+                fit_mean + fit_sdev,
+                color=color,
+                alpha=0.3,
+            )
+            y_data_re.append(np.asarray(fit_mean, dtype=float))
+            yerr_re.append(np.asarray(fit_sdev, dtype=float))
+
+        center_min = min(np.min(np.asarray(tau_dict[tsep], dtype=float) - tsep / 2) for tsep in tsep_ls)
+        center_max = max(np.max(np.asarray(tau_dict[tsep], dtype=float) - tsep / 2) for tsep in tsep_ls)
+        band_x = np.linspace(center_min, center_max, 2)
+        matrix_element = fit_result.p["O00_re"] / (2 * fit_result.p["E0"])
+        band_mean = np.full(2, gv.mean(matrix_element), dtype=float)
+        band_sdev = np.full(2, gv.sdev(matrix_element), dtype=float)
+        ax_real.fill_between(
+            band_x,
+            band_mean - band_sdev,
+            band_mean + band_sdev,
+            color="grey",
+            alpha=0.35,
+            label=fit_label,
+        )
+        y_data_re.append(band_mean)
+        yerr_re.append(band_sdev)
+
     ax_real.set_xlabel(TAU_CENTER_LABEL, **FONT_SIZE)
     ax_real.set_ylabel(RATIO_REAL_LABEL, **FONT_SIZE)
     ax_real.legend(ncol=2, loc="upper right", **LEGEND_SIZE)
-    ax_real.set_ylim(auto_ylim([gv.mean(ratio_real[tsep]) for tsep in tsep_ls], [gv.sdev(ratio_real[tsep]) for tsep in tsep_ls], 2))
+    ax_real.set_ylim(auto_ylim(y_data_re, yerr_re, 2))
     
     if ratio_imag is not None:
         fig_imag, ax_imag = default_plot()
+        y_data_im: list[np.ndarray] = []
+        yerr_im: list[np.ndarray] = []
         for tsep in tsep_ls:
-            ax_imag.errorbar(tau_dict[tsep] - tsep/2, gv.mean(ratio_imag[tsep]), yerr=gv.sdev(ratio_imag[tsep]), label=f"{TSEP}={tsep} $a$", **ERRORBAR_CIRCLE_STYLE)
+            y_mean = gv.mean(ratio_imag[tsep])
+            y_sdev = gv.sdev(ratio_imag[tsep])
+            ax_imag.errorbar(tau_dict[tsep] - tsep/2, y_mean, yerr=y_sdev, label=f"{TSEP}={tsep} $a$", **ERRORBAR_CIRCLE_STYLE)
+            y_data_im.append(np.asarray(y_mean, dtype=float))
+            yerr_im.append(np.asarray(y_sdev, dtype=float))
+
+        if fit_result is not None:
+            fit_tseps = list(tsep_ls if fit_tsep_ls is None else fit_tsep_ls)
+            for tsep in fit_tseps:
+                idx = tsep_ls.index(tsep)
+                color = COLOR_CYCLE[idx % len(COLOR_CYCLE)]
+                fit_tau = np.linspace(fit_tau_cut - 0.5, tsep - fit_tau_cut + 0.5, 200)
+                fit_t = np.full_like(fit_tau, float(tsep))
+                fit_ratio = pt3_ratio_im_fcn(fit_t, fit_tau, fit_result.p, fit_lt, nstate=nstate)
+                fit_mean = gv.mean(fit_ratio)
+                fit_sdev = gv.sdev(fit_ratio)
+                fit_x = fit_tau - tsep / 2
+                ax_imag.fill_between(
+                    fit_x,
+                    fit_mean - fit_sdev,
+                    fit_mean + fit_sdev,
+                    color=color,
+                    alpha=0.3,
+                )
+                y_data_im.append(np.asarray(fit_mean, dtype=float))
+                yerr_im.append(np.asarray(fit_sdev, dtype=float))
+
+            center_min = min(np.min(np.asarray(tau_dict[tsep], dtype=float) - tsep / 2) for tsep in tsep_ls)
+            center_max = max(np.max(np.asarray(tau_dict[tsep], dtype=float) - tsep / 2) for tsep in tsep_ls)
+            band_x = np.linspace(center_min, center_max, 2)
+            matrix_element = fit_result.p["O00_im"] / (2 * fit_result.p["E0"])
+            band_mean = np.full(2, gv.mean(matrix_element), dtype=float)
+            band_sdev = np.full(2, gv.sdev(matrix_element), dtype=float)
+            ax_imag.fill_between(
+                band_x,
+                band_mean - band_sdev,
+                band_mean + band_sdev,
+                color="grey",
+                alpha=0.35,
+                label=fit_label,
+            )
+            y_data_im.append(band_mean)
+            yerr_im.append(band_sdev)
+
         ax_imag.set_xlabel(TAU_CENTER_LABEL, **FONT_SIZE)
         ax_imag.set_ylabel(RATIO_IMAG_LABEL, **FONT_SIZE)
         ax_imag.legend(ncol=2, loc="upper right", **LEGEND_SIZE)
-        ax_imag.set_ylim(auto_ylim([gv.mean(ratio_imag[tsep]) for tsep in tsep_ls], [gv.sdev(ratio_imag[tsep]) for tsep in tsep_ls], 2))
+        ax_imag.set_ylim(auto_ylim(y_data_im, yerr_im, 2))
         
         if save_path is not None:
             path = Path(save_path)
             path.parent.mkdir(parents=True, exist_ok=True)
-            fig_real.savefig(path / f"{save_path}_real.pdf", bbox_inches="tight", transparent=True)
-            fig_imag.savefig(path / f"{save_path}_imag.pdf", bbox_inches="tight", transparent=True)
+            fig_real.savefig(
+                path.with_name(f"{path.name}_real.pdf"),
+                bbox_inches="tight",
+                transparent=True,
+            )
+            fig_imag.savefig(
+                path.with_name(f"{path.name}_imag.pdf"),
+                bbox_inches="tight",
+                transparent=True,
+            )
 
         if show:
             fig_real.show()
@@ -281,10 +373,260 @@ def pt3_ratio_plot(
         if save_path is not None:
             path = Path(save_path)
             path.parent.mkdir(parents=True, exist_ok=True)
-            fig_real.savefig(path / f"{save_path}_real.pdf", bbox_inches="tight", transparent=True)
+            fig_real.savefig(
+                path.with_name(f"{path.name}_real.pdf"),
+                bbox_inches="tight",
+                transparent=True,
+            )
         if show:
             fig_real.show()
         return (fig_real, ax_real)
+
+
+def ff_ratio_plot(
+    tau_dict: dict[int, np.ndarray],
+    ratio_real: dict[int, np.ndarray],
+    *,
+    fit_result: object | None = None,
+    fit_tsep_ls: Sequence[int] | None = None,
+    fit_tau_cut: int = 1,
+    fit_label: str = "Fit",
+    ff_sign: float = 1.0,
+    id_label: dict[str, object] | None = None,
+    save_path: str | Path | None = None,
+    show: bool = False,
+) -> tuple[Figure, Axes]:
+    """Plot form-factor ratio data with optional two-state fit bands."""
+
+    tsep_ls = sorted(ratio_real.keys())
+
+    title_prefix = ""
+    if id_label is not None:
+        title_prefix = ", ".join(f"{key} = {value}" for key, value in id_label.items())
+
+    fig, ax = default_plot()
+    y_data_ls: list[np.ndarray] = []
+    yerr_data_ls: list[np.ndarray] = []
+
+    for idx, tsep in enumerate(tsep_ls):
+        color = COLOR_CYCLE[idx % len(COLOR_CYCLE)]
+        ratio_row = np.asarray(ratio_real[tsep], dtype=object)
+        tau_center = np.asarray(tau_dict[tsep], dtype=float) - tsep / 2
+        y_mean = gv.mean(ratio_row)
+        y_sdev = gv.sdev(ratio_row)
+        ax.errorbar(
+            tau_center,
+            y_mean,
+            yerr=y_sdev,
+            label=f"{TSEP}={tsep} $a$",
+            color=color,
+            **ERRORBAR_CIRCLE_STYLE,
+        )
+        y_data_ls.append(np.asarray(y_mean, dtype=float))
+        yerr_data_ls.append(np.asarray(y_sdev, dtype=float))
+
+    if fit_result is not None:
+        fit_tseps = list(tsep_ls if fit_tsep_ls is None else fit_tsep_ls)
+        for tsep in fit_tseps:
+            idx = tsep_ls.index(tsep)
+            color = COLOR_CYCLE[idx % len(COLOR_CYCLE)]
+            fit_tau = np.linspace(fit_tau_cut - 0.5, tsep - fit_tau_cut + 0.5, 200)
+            fit_t = np.full_like(fit_tau, float(tsep))
+            fit_ratio = ff_ratio_fcn((fit_t, fit_tau), fit_result.p)
+            fit_mean = gv.mean(fit_ratio)
+            fit_sdev = gv.sdev(fit_ratio)
+            fit_x = fit_tau - tsep / 2
+            ax.fill_between(
+                fit_x,
+                fit_mean - fit_sdev,
+                fit_mean + fit_sdev,
+                color=color,
+                alpha=0.3,
+            )
+            y_data_ls.append(np.asarray(fit_mean, dtype=float))
+            yerr_data_ls.append(np.asarray(fit_sdev, dtype=float))
+
+        ff_param = fit_result.p["ff"]
+        center_min = min(
+            np.min(np.asarray(tau_dict[tsep], dtype=float) - tsep / 2)
+            for tsep in tsep_ls
+        )
+        center_max = max(
+            np.max(np.asarray(tau_dict[tsep], dtype=float) - tsep / 2)
+            for tsep in tsep_ls
+        )
+        band_x = np.linspace(center_min, center_max, 2)
+        band_mean = np.full(2, gv.mean(ff_sign * ff_param), dtype=float)
+        band_sdev = np.full(2, gv.sdev(ff_sign * ff_param), dtype=float)
+        ax.fill_between(
+            band_x,
+            band_mean - band_sdev,
+            band_mean + band_sdev,
+            color="grey",
+            alpha=0.35,
+            label=fit_label,
+        )
+        y_data_ls.append(band_mean)
+        yerr_data_ls.append(band_sdev)
+
+    ax.set_xlabel(TAU_CENTER_LABEL, **FONT_SIZE)
+    ax.set_ylabel(RATIO_REAL_LABEL, **FONT_SIZE)
+    ax.set_ylim(auto_ylim(y_data_ls, yerr_data_ls, 2))
+    ax.legend(ncol=2, loc="upper right", **LEGEND_SIZE)
+    if title_prefix:
+        ax.set_title(title_prefix, **FONT_SIZE)
+
+    if save_path is not None:
+        path = Path(save_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path.with_name(f"{path.name}_real.pdf"), bbox_inches="tight", transparent=True)
+    if show:
+        fig.show()
+    return fig, ax
+
+
+def ff_sum_plot(
+    tsep_ls: Sequence[int],
+    sum_real: np.ndarray | Sequence[object],
+    *,
+    fit_result: object | None = None,
+    fit_tsep_ls: Sequence[int] | None = None,
+    fit_tau_cut: int = 1,
+    fit_label: str = "Fit",
+    ff_sign: float = 1.0,
+    id_label: dict[str, object] | None = None,
+    save_path: str | Path | None = None,
+    show: bool = False,
+) -> tuple[Figure, Axes]:
+    """Plot tau-averaged form-factor sum data with optional fit bands."""
+
+    t = np.asarray(tsep_ls, dtype=int)
+    sum_arr = np.asarray(sum_real, dtype=object)
+
+    title_prefix = ""
+    if id_label is not None:
+        title_prefix = ", ".join(f"{key} = {value}" for key, value in id_label.items())
+
+    fig, ax = default_plot()
+    sum_mean = gv.mean(sum_arr)
+    sum_sdev = gv.sdev(sum_arr)
+    y_data_ls: list[np.ndarray] = [np.asarray(sum_mean, dtype=float)]
+    yerr_data_ls: list[np.ndarray] = [np.asarray(sum_sdev, dtype=float)]
+
+    ax.errorbar(
+        t,
+        sum_mean,
+        yerr=sum_sdev,
+        label="Data",
+        **ERRORBAR_CIRCLE_STYLE,
+    )
+
+    if fit_result is not None:
+        fit_t = np.asarray(list(t if fit_tsep_ls is None else fit_tsep_ls), dtype=float)
+
+        fit_sum = ff_sum_fcn(fit_t, fit_tau_cut, fit_result.p)
+        fit_mean = gv.mean(fit_sum)
+        fit_sdev = gv.sdev(fit_sum)
+        ax.fill_between(
+            fit_t,
+            fit_mean - fit_sdev,
+            fit_mean + fit_sdev,
+            alpha=0.35,
+        )
+        y_data_ls.append(np.asarray(fit_mean, dtype=float))
+        yerr_data_ls.append(np.asarray(fit_sdev, dtype=float))
+
+        ff_param = fit_result.p["ff"]
+        band_x = np.linspace(float(np.min(t)), float(np.max(t)), 2)
+        band_mean = np.full(2, gv.mean(ff_sign * ff_param), dtype=float)
+        band_sdev = np.full(2, gv.sdev(ff_sign * ff_param), dtype=float)
+        ax.fill_between(
+            band_x,
+            band_mean - band_sdev,
+            band_mean + band_sdev,
+            color="grey",
+            alpha=0.35,
+            label=fit_label,
+        )
+        y_data_ls.append(band_mean)
+        yerr_data_ls.append(band_sdev)
+
+    ax.set_xlabel(TSEP_LABEL, **FONT_SIZE)
+    ax.set_ylabel(r"$\mathcal{S}(t_{\mathrm{sep}})$", **FONT_SIZE)
+    ax.set_ylim(auto_ylim(y_data_ls, yerr_data_ls, 2))
+    ax.legend(ncol=2, loc="upper right", **LEGEND_SIZE)
+    if title_prefix:
+        ax.set_title(title_prefix, **FONT_SIZE)
+
+    if save_path is not None:
+        path = Path(save_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(path.with_name(f"{path.name}_real.pdf"), bbox_inches="tight", transparent=True)
+    if show:
+        fig.show()
+    return fig, ax
+
+
+def ff_joint_plot(
+    tau_dict: dict[int, np.ndarray],
+    ratio_real: dict[int, np.ndarray],
+    *,
+    sum_tsep_ls: Sequence[int] | None = None,
+    sum_real: np.ndarray | Sequence[object] | None = None,
+    fit_result: object | None = None,
+    fit_tsep_ls: Sequence[int] | None = None,
+    fit_tau_cut: int = 1,
+    fit_label: str = "Fit",
+    ff_sign: float = 1.0,
+    id_label: dict[str, object] | None = None,
+    save_path: str | Path | None = None,
+    show: bool = False,
+) -> tuple[tuple[Figure, Axes], tuple[Figure, Axes]]:
+    """Plot ratio and tau-averaged sum panels for form-factor analyses."""
+
+    if sum_real is None:
+        inferred_tsep_ls = sorted(ratio_real.keys()) if sum_tsep_ls is None else list(sum_tsep_ls)
+        inferred_sum = []
+        for tsep in inferred_tsep_ls:
+            inferred_sum.append(np.mean(np.asarray(ratio_real[tsep], dtype=object)))
+        sum_tsep_arr = np.asarray(inferred_tsep_ls, dtype=int)
+        sum_arr = np.asarray(inferred_sum, dtype=object)
+    else:
+        sum_tsep_arr = np.asarray(sum_tsep_ls, dtype=int)
+        sum_arr = np.asarray(sum_real, dtype=object)
+
+    ratio_save_path: str | Path | None = None
+    sum_save_path: str | Path | None = None
+    if save_path is not None:
+        base = Path(save_path)
+        ratio_save_path = base.with_name(f"{base.name}_ratio")
+        sum_save_path = base.with_name(f"{base.name}_sum")
+
+    fig_ratio, ax_ratio = ff_ratio_plot(
+        tau_dict,
+        ratio_real,
+        fit_result=fit_result,
+        fit_tsep_ls=fit_tsep_ls,
+        fit_tau_cut=fit_tau_cut,
+        fit_label=fit_label,
+        ff_sign=ff_sign,
+        id_label=id_label,
+        save_path=ratio_save_path,
+        show=show,
+    )
+    fig_sum, ax_sum = ff_sum_plot(
+        sum_tsep_arr,
+        sum_arr,
+        fit_result=fit_result,
+        fit_tsep_ls=fit_tsep_ls,
+        fit_tau_cut=fit_tau_cut,
+        fit_label=fit_label,
+        ff_sign=ff_sign,
+        id_label=id_label,
+        save_path=sum_save_path,
+        show=show,
+    )
+    return (fig_ratio, ax_ratio), (fig_sum, ax_sum)
 
 
 def qda_ratio_plot(
@@ -292,20 +634,19 @@ def qda_ratio_plot(
     qda_ratio_real: np.ndarray,
     qda_ratio_imag: np.ndarray | None = None,
     *,
+    fit_result: object | None = None,
+    pt2_fit_result: object | None = None,
+    fit_trange: tuple[int, int] | Sequence[int] | np.ndarray | None = None,
+    fit_label: str = "Fit",
+    Lt: int | None = None,
     id_label: dict[str, object] | None = None,
     save_path: str | Path | None = None,
     show: bool = False,
 ) -> tuple[tuple[Figure, Axes], tuple[Figure, Axes]] | tuple[Figure, Axes]:
     """Plot qDA/2pt ratio data without fit-result bands."""
     t = _trange_to_array(trange, name="trange")
-    if len(t) != len(qda_ratio_real):
-        raise ValueError(
-            f"trange length must match qda_ratio_real length: {len(t)} != {len(qda_ratio_real)}"
-        )
-    if qda_ratio_imag is not None and len(t) != len(qda_ratio_imag):
-        raise ValueError(
-            f"trange length must match qda_ratio_imag length: {len(t)} != {len(qda_ratio_imag)}"
-        )
+    fit_t = _trange_to_array(fit_trange, default_stop=len(t), name="fit_trange") if fit_trange is not None else t
+    fit_lt = max(np.max(t), np.max(fit_t)) + 1 if Lt is None else Lt
 
     title_prefix = ""
     if id_label is not None:
@@ -313,6 +654,8 @@ def qda_ratio_plot(
         title_prefix = f"{title_prefix}, "
 
     fig_real, ax_real = default_plot()
+    y_data_re = [np.asarray(gv.mean(qda_ratio_real), dtype=float)]
+    yerr_re = [np.asarray(gv.sdev(qda_ratio_real), dtype=float)]
     ax_real.errorbar(
         t,
         gv.mean(qda_ratio_real),
@@ -320,14 +663,35 @@ def qda_ratio_plot(
         label="Data",
         **ERRORBAR_CIRCLE_STYLE,
     )
+    if fit_result is not None:
+        pt2_params = fit_result.p if pt2_fit_result is None else pt2_fit_result.p
+        pt2_nstate = _fit_nstate(fit_result if pt2_fit_result is None else pt2_fit_result)
+        qda_nstate = _fit_nstate(fit_result)
+        fit_ratio = qda_re_fcn(fit_t, fit_result.p, fit_lt, nstate=qda_nstate) / pt2_re_fcn(
+            fit_t, pt2_params, fit_lt, nstate=pt2_nstate
+        )
+        fit_mean = gv.mean(fit_ratio)
+        fit_sdev = gv.sdev(fit_ratio)
+        ax_real.fill_between(
+            fit_t,
+            fit_mean - fit_sdev,
+            fit_mean + fit_sdev,
+            alpha=0.35,
+            label=fit_label,
+        )
+        y_data_re.append(np.asarray(fit_mean, dtype=float))
+        yerr_re.append(np.asarray(fit_sdev, dtype=float))
+
     ax_real.set_xlabel(TSEP_LABEL, **FONT_SIZE)
     ax_real.set_ylabel(r"$\Re[R_{\mathrm{qDA}}(t_{\mathrm{sep}})]$", **FONT_SIZE)
     ax_real.legend(**LEGEND_SIZE)
     ax_real.set_title(f"{title_prefix}R_qDA_real", **FONT_SIZE)
-    ax_real.set_ylim(auto_ylim([gv.mean(qda_ratio_real)], [gv.sdev(qda_ratio_real)]))
+    ax_real.set_ylim(auto_ylim(y_data_re, yerr_re))
 
     if qda_ratio_imag is not None:
         fig_imag, ax_imag = default_plot()
+        y_data_im = [np.asarray(gv.mean(qda_ratio_imag), dtype=float)]
+        yerr_im = [np.asarray(gv.sdev(qda_ratio_imag), dtype=float)]
         ax_imag.errorbar(
             t,
             gv.mean(qda_ratio_imag),
@@ -335,11 +699,30 @@ def qda_ratio_plot(
             label="Data",
             **ERRORBAR_CIRCLE_STYLE,
         )
+        if fit_result is not None:
+            pt2_params = fit_result.p if pt2_fit_result is None else pt2_fit_result.p
+            pt2_nstate = _fit_nstate(fit_result if pt2_fit_result is None else pt2_fit_result)
+            qda_nstate = _fit_nstate(fit_result)
+            fit_ratio = qda_im_fcn(fit_t, fit_result.p, fit_lt, nstate=qda_nstate) / pt2_re_fcn(
+                fit_t, pt2_params, fit_lt, nstate=pt2_nstate
+            )
+            fit_mean = gv.mean(fit_ratio)
+            fit_sdev = gv.sdev(fit_ratio)
+            ax_imag.fill_between(
+                fit_t,
+                fit_mean - fit_sdev,
+                fit_mean + fit_sdev,
+                alpha=0.35,
+                label=fit_label,
+            )
+            y_data_im.append(np.asarray(fit_mean, dtype=float))
+            yerr_im.append(np.asarray(fit_sdev, dtype=float))
+
         ax_imag.set_xlabel(TSEP_LABEL, **FONT_SIZE)
         ax_imag.set_ylabel(r"$\Im[R_{\mathrm{qDA}}(t_{\mathrm{sep}})]$", **FONT_SIZE)
         ax_imag.legend(**LEGEND_SIZE)
         ax_imag.set_title(f"{title_prefix}R_qDA_imag", **FONT_SIZE)
-        ax_imag.set_ylim(auto_ylim([gv.mean(qda_ratio_imag)], [gv.sdev(qda_ratio_imag)]))
+        ax_imag.set_ylim(auto_ylim(y_data_im, yerr_im))
 
         if save_path is not None:
             path = Path(save_path)
@@ -366,23 +749,65 @@ def fh_plot(
     fh_real: np.ndarray,
     fh_imag: np.ndarray | None = None,
     *,
+    fit_result: object | None = None,
+    fit_tsep_ls: Sequence[int] | None = None,
+    fit_tau_cut: int = 0,
+    fit_label: str = "Fit",
+    dt: int | float | None = None,
     save_path: str | Path | None = None,
     show: bool = False,
 ) -> tuple[tuple[Figure, Axes], tuple[Figure, Axes]] | tuple[Figure, Axes]:
     """Plot FH vs tsep from precomputed gvar arrays."""
 
+    t = np.asarray(tsep_ls, dtype=float)
+    fit_t = np.asarray(list(t if fit_tsep_ls is None else fit_tsep_ls), dtype=float)
+    fit_dt = (t[1] - t[0]) if dt is None and len(t) > 1 else (1 if dt is None else dt)
+    fit_nstate = 1 if fit_result is None else _fh_fit_nstate(fit_result)
+
     fig_real, ax_real = default_plot()
-    ax_real.errorbar(tsep_ls, gv.mean(fh_real), yerr=gv.sdev(fh_real), **ERRORBAR_CIRCLE_STYLE)
+    y_data_re = [np.asarray(gv.mean(fh_real), dtype=float)]
+    yerr_re = [np.asarray(gv.sdev(fh_real), dtype=float)]
+    ax_real.errorbar(t, gv.mean(fh_real), yerr=gv.sdev(fh_real), label="Data", **ERRORBAR_CIRCLE_STYLE)
+    if fit_result is not None:
+        fit_fh = fh_re_fcn(fit_t, fit_tau_cut, fit_result.p, nstate=fit_nstate, dt=fit_dt)
+        fit_mean = gv.mean(fit_fh)
+        fit_sdev = gv.sdev(fit_fh)
+        ax_real.fill_between(
+            fit_t,
+            fit_mean - fit_sdev,
+            fit_mean + fit_sdev,
+            alpha=0.35,
+            label=fit_label,
+        )
+        y_data_re.append(np.asarray(fit_mean, dtype=float))
+        yerr_re.append(np.asarray(fit_sdev, dtype=float))
     ax_real.set_xlabel(TSEP_LABEL, **FONT_SIZE)
     ax_real.set_ylabel(r"$\Re[\mathrm{FH}(t_{\mathrm{sep}})]$", **FONT_SIZE)
-    ax_real.set_ylim(auto_ylim([gv.mean(fh_real)], [gv.sdev(fh_real)], 2))
+    ax_real.set_ylim(auto_ylim(y_data_re, yerr_re, 2))
+    ax_real.legend(**LEGEND_SIZE)
 
     if fh_imag is not None:
         fig_imag, ax_imag = default_plot()
-        ax_imag.errorbar(tsep_ls, gv.mean(fh_imag), yerr=gv.sdev(fh_imag), **ERRORBAR_CIRCLE_STYLE)
+        y_data_im = [np.asarray(gv.mean(fh_imag), dtype=float)]
+        yerr_im = [np.asarray(gv.sdev(fh_imag), dtype=float)]
+        ax_imag.errorbar(t, gv.mean(fh_imag), yerr=gv.sdev(fh_imag), label="Data", **ERRORBAR_CIRCLE_STYLE)
+        if fit_result is not None:
+            fit_fh = fh_im_fcn(fit_t, fit_tau_cut, fit_result.p, nstate=fit_nstate, dt=fit_dt)
+            fit_mean = gv.mean(fit_fh)
+            fit_sdev = gv.sdev(fit_fh)
+            ax_imag.fill_between(
+                fit_t,
+                fit_mean - fit_sdev,
+                fit_mean + fit_sdev,
+                alpha=0.35,
+                label=fit_label,
+            )
+            y_data_im.append(np.asarray(fit_mean, dtype=float))
+            yerr_im.append(np.asarray(fit_sdev, dtype=float))
         ax_imag.set_xlabel(TSEP_LABEL, **FONT_SIZE)
         ax_imag.set_ylabel(r"$\Im[\mathrm{FH}(t_{\mathrm{sep}})]$", **FONT_SIZE)
-        ax_imag.set_ylim(auto_ylim([gv.mean(fh_imag)], [gv.sdev(fh_imag)], 2))
+        ax_imag.set_ylim(auto_ylim(y_data_im, yerr_im, 2))
+        ax_imag.legend(**LEGEND_SIZE)
 
         if save_path is not None:
             path = Path(save_path)
